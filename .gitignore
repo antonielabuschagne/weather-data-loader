@@ -1,0 +1,5 @@
+run-dynamodb-local.sh
+.env
+dynamodb/*
+cdk/cdk.out/*
+cdk/cdk.context.json
