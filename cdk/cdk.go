@@ -87,7 +87,7 @@ func NewCDKStack(scope constructs.Construct, cdkProps CDKStackProps) awscdk.Stac
 	dataBucket.AddObjectCreatedNotification(awss3notifications.NewLambdaDestination(onWeatherDataReceivedHandler),
 		&awss3.NotificationKeyFilter{
 			Suffix: jsii.String(".csv"),
-			//			Prefix: jsii.String("incoming"),
+			Prefix: jsii.String("weather-data"),
 		})
 	weatherDataProcessingQueue.GrantSendMessages(onWeatherDataReceivedHandler)
 
