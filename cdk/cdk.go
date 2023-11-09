@@ -73,7 +73,6 @@ func NewCDKStack(scope constructs.Construct, cdkProps CDKStackProps) awscdk.Stac
 		Environment: &map[string]*string{
 			"WEATHER_DATA_BUCKET_NAME":   dataBucket.BucketName(),
 			"WEATHER_DATA_SQS_QUEUE_URL": weatherDataProcessingQueue.QueueUrl(),
-			"WEATHER_API_ENDPOINT":       aws.String("https://api.openweathermap.org/data/2.5/weather"),
 		},
 		MemorySize: jsii.Number(1024),
 		Tracing:    awslambda.Tracing_ACTIVE,
