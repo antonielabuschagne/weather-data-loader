@@ -12,18 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type Handler struct {
-	Log *zapray.Logger
-	MessageProcessor processors.MessageProcessor
-}
-
-func NewHandler(log *zapray.Logger, mp processors.MessageProcessor) Handler {
-	return Handler{
-		Log: log,
-		MessageProcessor: mp,
-	}
-}
-
 func main() {
 	log, err := zapray.NewProduction()
 	if err != nil {
@@ -41,9 +29,21 @@ func main() {
 	if err != nil {
 		panic("unable to build weather API client")
 	}
-	mp := processors.NewMessageProcessor(log, wc)
+	mp := processors.NewMessageProcessor(log, wc.GetWeatherForLatLong)
 	h := NewHandler(log, mp)
 	lambda.Start(h.handler)
+}
+
+type Handler struct {
+	Log              *zapray.Logger
+	MessageProcessor processors.MessageProcessor
+}
+
+func NewHandler(log *zapray.Logger, mp processors.MessageProcessor) Handler {
+	return Handler{
+		Log:              log,
+		MessageProcessor: mp,
+	}
 }
 
 func (h *Handler) handler(ctx context.Context, e events.SQSEvent) (err error) {

@@ -13,3 +13,26 @@ I've recently been working with a team where we've had a file processing job to 
 * Upload longitude/latitude data to s3 (see [sample](sample.csv))
 * Check cloudwatch (log group: weatherapp-onMessageReceivedHandler*) as it should have a log entry with the
   weather data (e.g. `"description": "light rain"`)
+
+## Tasks
+
+### synth
+
+Synth stack
+```sh
+cd cdk && aws-vault exec personal -- cdk synth
+```
+
+### deploy
+
+Deploy stack to AWS
+```sh
+cd cdk && aws-vault exec personal -- cdk deploy
+```
+
+### destroy
+
+Destroy stack from AWS
+```sh
+cd cdk && aws-vault exec personal -- cdk destroy
+```

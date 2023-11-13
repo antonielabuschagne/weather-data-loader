@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 
 	"github.com/antonielabuschagne/data-loader/event/processors"
 	"github.com/antonielabuschagne/data-loader/messagequeue"
@@ -14,20 +13,6 @@ import (
 	"github.com/joerdav/zapray"
 	"go.uber.org/zap"
 )
-
-type Handler struct {
-	Log      *zapray.Logger
-	Bucket   string
-	QueueURL string
-}
-
-func NewHandler(log *zapray.Logger, bucket string, queueUrl string) Handler {
-	return Handler{
-		Log:      log,
-		Bucket:   bucket,
-		QueueURL: queueUrl,
-	}
-}
 
 func main() {
 	log, err := zapray.NewProduction()
@@ -42,35 +27,39 @@ func main() {
 	if bucket == "" {
 		log.Fatal("WEATHER_DATA_BUCKET_NAME not defined")
 	}
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatal("error loading config")
+	}
+	// our handler needs an EventProcessor that will do something with the event data and return a message
+	// id as receipt of delivery. What our S3EventProcessor needs to do that, is a fetcher for fetching the
+	// data and a message queue for delivering the data somewhere. That's the extend to what it cares about.
+	messageQueue := messagequeue.NewMessageQueue(cfg, queueUrl)
+	fetcher := s3client.NewS3DataFetcher(cfg, bucket)
+	processor := processors.NewS3EventProcessor(fetcher, messageQueue.SendMessage, log)
 
-	h := NewHandler(log, bucket, queueUrl)
+	h := NewHandler(log, processor)
 	lambda.Start(h.handler)
 }
 
-func (h *Handler) handler(ctx context.Context, e events.S3Event) (err error) {
-	log := h.Log
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return
-	}
-	messageQueue := messagequeue.NewMessageQueue(cfg, h.QueueURL)
-	fetcher := s3client.NewS3DataFetcher(cfg, h.Bucket)
-	processor := processors.NewS3EventProcessor(fetcher, messageQueue, log)
+type Handler struct {
+	Log            *zapray.Logger
+	EventProcessor processors.EventProcessor
+}
 
-	log.Info("processing weather data", zap.Int("records", len(e.Records)))
-	for _, r := range e.Records {
-		key := r.S3.Object.Key
-		log.Info("processing s3 event", zap.String("key", key))
-		if !strings.HasSuffix(key, ".csv") {
-			log.Warn("not the correct file format to process")
-			continue
-		}
-		messages, err := processor.Process(ctx, key)
-		if err != nil {
-			log.Error("unable to process file", zap.String("error", err.Error()))
-		}
-		log.Info("messages processed", zap.Any("messages", messages))
+func NewHandler(log *zapray.Logger, ep processors.EventProcessor) Handler {
+	return Handler{
+		Log:            log,
+		EventProcessor: ep,
 	}
-	log.Info("event processed completed")
+}
+
+func (h *Handler) handler(ctx context.Context, e events.S3Event) (err error) {
+	h.Log.Info("processing weather data", zap.Int("records", len(e.Records)))
+	messages, err := h.EventProcessor.Process(ctx, e)
+	if err != nil {
+		h.Log.Error("unable to process file", zap.String("error", err.Error()))
+	}
+	h.Log.Info("event processed completed", zap.Any("messages", messages))
 	return
 }

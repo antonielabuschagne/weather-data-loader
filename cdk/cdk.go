@@ -41,9 +41,6 @@ func NewCDKStack(scope constructs.Construct, cdkProps CDKStackProps) awscdk.Stac
 			NoncurrentVersionExpiration:         awscdk.Duration_Days(jsii.Number(7)),
 			Expiration:                          awscdk.Duration_Days(jsii.Number(7)),
 		}},
-		// TODO: add log bucket
-		// ServerAccessLogsBucket: logBucket,
-		// ServerAccessLogsPrefix: aws.String("s3logs/weatherDataImporter"),
 	})
 
 	weatherDataProcessingDLQ := awssqs.NewQueue(stack, jsii.String("weatherDataProcessorDLQ"), &awssqs.QueueProps{
@@ -79,6 +76,7 @@ func NewCDKStack(scope constructs.Construct, cdkProps CDKStackProps) awscdk.Stac
 		Timeout:    awscdk.Duration_Millis(jsii.Number(60000)),
 		Vpc:        vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
+			// we need a subnet that routes to the internet.
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
 	})
@@ -110,6 +108,11 @@ func NewCDKStack(scope constructs.Construct, cdkProps CDKStackProps) awscdk.Stac
 	onMessageReceivedHandler.AddEventSource(awslambdaeventsources.NewSqsEventSource(weatherDataProcessingQueue, &awslambdaeventsources.SqsEventSourceProps{
 		BatchSize: jsii.Number(1),
 	}))
+	awscdk.NewCfnOutput(stack, jsii.String("dataBucket"), &awscdk.CfnOutputProps{
+		Value:       dataBucket.BucketArn(),
+		Description: jsii.String("data bucket ARN"),
+		ExportName:  jsii.String("dataBucket"),
+	})
 	return stack
 }
 

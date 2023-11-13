@@ -18,7 +18,7 @@ func NewMessageQueue(cfg aws.Config, queueUrl string) (mq MessageQueue) {
 	return
 }
 
-func (mq *MessageQueue) SendMessage(ctx context.Context, message string) (messageId string, err error) {
+func (mq MessageQueue) SendMessage(ctx context.Context, message string) (messageId string, err error) {
 	msg := sqs.SendMessageInput{
 		DelaySeconds: 10,
 		MessageBody:  aws.String(message),
