@@ -28,15 +28,17 @@ type S3EventProcessor struct {
 	MessageQueue MessageQueueFunc
 }
 
-func NewS3EventProcessor(df DataFetcherFunc, mq MessageQueueFunc, log *zapray.Logger) (p S3EventProcessor) {
-	p.DataFetcher = df
-	p.MessageQueue = mq
-	p.Log = log
-	return
+func NewS3EventProcessor(df DataFetcherFunc, mq MessageQueueFunc, log *zapray.Logger) S3EventProcessor {
+	return S3EventProcessor{
+		DataFetcher:  df,
+		MessageQueue: mq,
+		Log:          log,
+	}
 }
 
-func (ep S3EventProcessor) Process(ctx context.Context, e events.S3Event) (processed []string, err error) {
+func (ep S3EventProcessor) Process(ctx context.Context, e events.S3Event) ([]string, error) {
 	log := ep.Log
+	processed := make([]string, 0, len(e.Records))
 	for _, r := range e.Records {
 		key := r.S3.Object.Key
 		log.Info("processing s3 event", zap.String("key", key))
@@ -52,17 +54,22 @@ func (ep S3EventProcessor) Process(ctx context.Context, e events.S3Event) (proce
 		processed = append(processed, messages...)
 		log.Info("messages processed", zap.Any("messages", messages))
 	}
-	return
+	return processed, nil
 }
 
-func (ep S3EventProcessor) processFile(ctx context.Context, key string) (processed []string, err error) {
+func (ep S3EventProcessor) processFile(ctx context.Context, key string) ([]string, error) {
 	log := ep.Log
 	lines, err := ep.getS3FileContent(ctx, key)
+	if err != nil {
+		log.Error("unable to get file content", zap.String("error", err.Error()))
+		return nil, err
+	}
 	if len(lines) <= 1 {
 		log.Info("file content empty (first row reserved for column heading)")
-		return
+		return nil, nil
 	}
 
+	processed := make([]string, 0, len(lines)-1) // minus header row
 	log.Info("processing CSV file", zap.Int("rows", len(lines)))
 	for _, line := range lines[1:] {
 		messageId, err := ep.addToMessageQueue(ctx, line)
@@ -72,24 +79,24 @@ func (ep S3EventProcessor) processFile(ctx context.Context, key string) (process
 		}
 		processed = append(processed, messageId)
 	}
-	return
+	return processed, nil
 }
 
-func (ep S3EventProcessor) addToMessageQueue(ctx context.Context, line []string) (messageId string, err error) {
+func (ep S3EventProcessor) addToMessageQueue(ctx context.Context, line []string) (string, error) {
 	log := ep.Log
 	message, err := convertRowToMessage(line)
 	if err != nil {
 		log.Error("unable to convert row into message", zap.String("error", err.Error()))
-		return
+		return "", err
 	}
 	log.Info("message details", zap.String("body", message))
-	messageId, err = ep.MessageQueue(ctx, message)
+	messageId, err := ep.MessageQueue(ctx, message)
 	if err != nil {
 		log.Error("unable to send message", zap.String("error", err.Error()))
-		return
+		return "", err
 	}
 	log.Info("message queued", zap.String("messageId", messageId))
-	return
+	return messageId, nil
 }
 
 func (ep S3EventProcessor) getS3FileContent(ctx context.Context, key string) (lines [][]string, err error) {
@@ -107,6 +114,10 @@ func (ep S3EventProcessor) getS3FileContent(ctx context.Context, key string) (li
 }
 
 func convertRowToMessage(row []string) (message string, err error) {
+	if len(row) < 2 {
+		err = errors.New("invalid row, lon/lat required")
+		return
+	}
 	lon := row[0]
 	lat := row[1]
 	if lon == "" || lat == "" {

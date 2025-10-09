@@ -19,18 +19,19 @@ type WeatherAPIClient struct {
 	Log    *zapray.Logger
 }
 
-func NewWeatherAPIClient(apiKey string, baseUrl string, log *zapray.Logger) (c WeatherAPIClient, err error) {
+func NewWeatherAPIClient(apiKey string, baseUrl string, log *zapray.Logger) (WeatherAPIClient, error) {
 	url, err := url.Parse(baseUrl)
 	if err != nil {
-		return
+		return WeatherAPIClient{}, fmt.Errorf("failed to parse base url: %w", err)
 	}
-	c.Log = log
-	c.URL = url
-	c.APIKey = apiKey
-	c.Client = &http.Client{
-		Timeout: 20 * time.Second,
-	}
-	return
+	return WeatherAPIClient{
+		Log:    log,
+		URL:    url,
+		APIKey: apiKey,
+		Client: &http.Client{
+			Timeout: 20 * time.Second,
+		},
+	}, nil
 }
 
 func (c *WeatherAPIClient) buildUrl(params map[string]string) *url.URL {
@@ -45,24 +46,25 @@ func (c *WeatherAPIClient) buildUrl(params map[string]string) *url.URL {
 	return url
 }
 
-func (c *WeatherAPIClient) GetWeatherForLatLong(ctx context.Context, lon, lat string) (result WeatherAPIResponse, err error) {
+func (c *WeatherAPIClient) GetWeatherForLatLong(ctx context.Context, lon, lat string) (WeatherAPIResponse, error) {
 	reqUrl := c.buildUrl(map[string]string{"lon": lon, "lat": lat})
 
 	c.Log.Info("sending weatherapi request")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl.String(), nil)
 	if err != nil {
-		return
+		return WeatherAPIResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	res, err := c.Client.Do(req)
 	if err != nil {
-		return
+		return WeatherAPIResponse{}, fmt.Errorf("failed to do request: %w", err)
 	}
 	defer res.Body.Close()
 	if statusOK := res.StatusCode >= 200 && res.StatusCode < 300; !statusOK {
 		body, _ := io.ReadAll(res.Body)
 		err = fmt.Errorf("api failed to respond with a 2xx status code, got: %d. body: %s", res.StatusCode, string(body))
-		return
+		return WeatherAPIResponse{}, err
 	}
+	var result WeatherAPIResponse
 	err = json.NewDecoder(res.Body).Decode(&result)
-	return
+	return result, err
 }

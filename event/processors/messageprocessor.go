@@ -17,10 +17,11 @@ type MessageProcessor struct {
 	WeatherClient WeatherFetcherFunc
 }
 
-func NewMessageProcessor(log *zapray.Logger, wc WeatherFetcherFunc) (mp MessageProcessor) {
-	mp.Log = log
-	mp.WeatherClient = wc
-	return
+func NewMessageProcessor(log *zapray.Logger, wc WeatherFetcherFunc) MessageProcessor {
+	return MessageProcessor{
+		Log:           log,
+		WeatherClient: wc,
+	}
 }
 
 func (mp *MessageProcessor) Process(ctx context.Context, message string) (err error) {
